@@ -26,6 +26,7 @@
 #include <openrct2/actions/scenery/LargeSceneryRemoveAction.h>
 #include <openrct2/actions/scenery/SmallSceneryRemoveAction.h>
 #include <openrct2/actions/scenery/WallRemoveAction.h>
+#include <openrct2/config/Config.h>
 #include <openrct2/entity/Balloon.h>
 #include <openrct2/entity/Duck.h>
 #include <openrct2/entity/EntityList.h>
@@ -87,7 +88,8 @@ namespace OpenRCT2::Ui
 
         info = GetMapCoordinatesFromPos(
             screenCoords,
-            { ViewportInteractionItem::entity, ViewportInteractionItem::ride, ViewportInteractionItem::parkEntrance });
+            { ViewportInteractionItem::entity, ViewportInteractionItem::ride, ViewportInteractionItem::parkEntrance,
+              ViewportInteractionItem::banner });
         auto tileElement = info.interactionType != ViewportInteractionItem::entity ? info.Element : nullptr;
         // Only valid when info.interactionType == ViewportInteractionItem::entity, but can't assign nullptr without compiler
         // complaining
@@ -150,6 +152,23 @@ namespace OpenRCT2::Ui
                 SetMapTooltip(ft);
                 break;
             }
+            case ViewportInteractionItem::banner:
+            {
+                auto banner = tileElement->asBanner()->getBanner();
+                if (banner != nullptr)
+                {
+                    auto* bannerEntry = ObjectEntryManager::GetObjectEntry<BannerSceneryEntry>(banner->type);
+
+                    auto ft = Formatter();
+                    ft.Add<StringId>(STR_MAP_TOOLTIP_BANNER_STRINGID_STRINGID);
+                    banner->formatTextWithColourTo(ft);
+                    ft.Add<StringId>(STR_MAP_TOOLTIP_STRINGID_CLICK_TO_MODIFY);
+                    ft.Add<StringId>(bannerEntry->name);
+                    SetMapTooltip(ft);
+                    return info;
+                }
+                break;
+            }
             default:
                 info.interactionType = ViewportInteractionItem::none;
                 break;
@@ -190,10 +209,21 @@ namespace OpenRCT2::Ui
     bool ViewportInteractionLeftClick(const ScreenCoordsXY& screenCoords)
     {
         auto info = ViewportInteractionGetItemLeft(screenCoords);
+        auto* windowMgr = GetWindowManager();
         auto& gameState = getGameState();
+        CoordsXYE tileElement;
 
         switch (info.interactionType)
         {
+            case ViewportInteractionItem::banner:
+            {
+                // Touch Interface Cannot use Mouse RightButton. So, Banner Click as LeftButton.
+                if (Config::Get().interface.touchEnhancements)
+                {
+                    ContextOpenDetailWindow(WindowDetail::banner, info.Element->asBanner()->getIndex().ToUnderlying());
+                }
+                return true;
+            }
             case ViewportInteractionItem::entity:
             {
                 auto entity = info.Entity;
@@ -242,9 +272,17 @@ namespace OpenRCT2::Ui
             }
             case ViewportInteractionItem::ride:
             {
-                auto intent = Intent(WindowDetail::track);
-                intent.PutExtra(INTENT_EXTRA_TILE_ELEMENT, info.Element);
-                ContextOpenIntent(&intent);
+                if (windowMgr->FindByClass(WindowClass::rideConstruction) != nullptr)
+                {
+                    tileElement = { info.Loc, info.Element };
+                    RideModify(tileElement);
+                }
+                else
+                {
+                    auto intent = Intent(WindowDetail::track);
+                    intent.PutExtra(INTENT_EXTRA_TILE_ELEMENT, info.Element);
+                    ContextOpenIntent(&intent);
+                }
                 return true;
             }
             case ViewportInteractionItem::parkEntrance:

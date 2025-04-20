@@ -470,10 +470,26 @@ namespace OpenRCT2::Ui::Windows
 
         void onScrollMouseDown(int32_t scrollIndex, const ScreenCoordsXY& screenCoords) override
         {
+            static RideSelection PreSelected;
+
             RideSelection item = ScrollGetRideListItemAt(screenCoords);
             if (item.Type == kRideTypeNull && item.EntryIndex == kObjectEntryIndexNull)
             {
                 return;
+            }
+
+            if (Config::Get().interface.touchEnhancements)
+            {
+                if (PreSelected != item)
+                {
+                    PreSelected = item;
+                    return;
+                }
+                else
+                {
+                    PreSelected.Type = kRideTypeNull;
+                    PreSelected.EntryIndex = kObjectEntryIndexNull;
+                }
             }
 
             _newRideVars.SelectedRide = item;
