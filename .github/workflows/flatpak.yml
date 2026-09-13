@@ -1,0 +1,41 @@
+name: Flatpak
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+# https://docs.github.com/en/actions/using-jobs/using-concurrency#example-using-a-fallback-value
+concurrency:
+  group: flatpak-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  flatpak:
+    name: Flatpak (${{ matrix.variant.arch }})
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      options: --privileged
+    strategy:
+      matrix:
+        variant:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+      # Don't fail the whole workflow if one architecture fails
+      fail-fast: false
+    runs-on: ${{ matrix.variant.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Build
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: OpenRCT2-${{ matrix.variant.arch }}.flatpak
+          manifest-path: distribution/linux/flatpak/io.openrct2.OpenRCT2.yaml
+          arch: ${{ matrix.variant.arch }}
+          artifact-name: OpenRCT2-${{ matrix.variant.arch }}.flatpak
