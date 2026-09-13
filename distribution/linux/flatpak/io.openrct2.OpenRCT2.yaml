@@ -1,0 +1,236 @@
+app-id: io.openrct2.OpenRCT2
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: openrct2
+rename-appdata-file: io.openrct2.openrct2.appdata.xml
+rename-desktop-file: io.openrct2.openrct2.desktop
+rename-icon: openrct2
+rename-mime-file: openrct2.xml
+
+finish-args:
+  # X11 + XShm access
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  # Pulseaudio access
+  - --socket=pulseaudio
+  # Network access - for multiplayer
+  - --share=network
+  # OpenGL access
+  - --device=dri
+  # Required for gamepad access, replace with "input" when allowed by Flathub
+  - --device=all
+  # Discord RPC
+  - --filesystem=xdg-run/app/com.discordapp.Discord:create
+  # Access to host Steam-installed RCT and RCT2 for auto-detection in OpenRCT2
+  - --filesystem=~/.local/share/Steam/steamapps/common/RollerCoaster Tycoon Deluxe:ro
+  - --filesystem=~/.local/share/Steam/steamapps/common/Rollercoaster Tycoon 2:ro
+  - --filesystem=~/.local/share/Steam/steamapps/common/RollerCoaster Tycoon Classic:ro
+  # Access to host Wine-installed RCT and RCT2 for auto-detection in OpenRCT2
+  - --filesystem=~/.wine/drive_c/GOG Games/RollerCoaster Tycoon Deluxe:ro
+  - --filesystem=~/.wine/drive_c/Program Files/GalaxyClient/Games/RollerCoaster Tycoon
+    Deluxe:ro
+  - --filesystem=~/.wine/drive_c/Program Files (x86)/GalaxyClient/Games/RollerCoaster
+    Tycoon Deluxe:ro
+  - --filesystem=~/.wine/drive_c/Program Files/Hasbro Interactive/RollerCoaster Tycoon:ro
+  - --filesystem=~/.wine/drive_c/Program Files (x86)/Hasbro Interactive/RollerCoaster
+    Tycoon:ro
+  - --filesystem=~/.wine/drive_c/GOG Games/RollerCoaster Tycoon 2 Triple Thrill Pack:ro
+  - --filesystem=~/.wine/drive_c/Program Files/GalaxyClient/Games/RollerCoaster Tycoon
+    2 Triple Thrill Pack:ro
+  - --filesystem=~/.wine/drive_c/Program Files (x86)/GalaxyClient/Games/RollerCoaster
+    Tycoon 2 Triple Thrill Pack:ro
+  - --filesystem=~/.wine/drive_c/Program Files/Atari/RollerCoaster Tycoon 2:ro
+  - --filesystem=~/.wine/drive_c/Program Files (x86)/Atari/RollerCoaster Tycoon 2:ro
+  - --filesystem=~/.wine/drive_c/Program Files/Infogrames/RollerCoaster Tycoon 2:ro
+  - --filesystem=~/.wine/drive_c/Program Files (x86)/Infogrames/RollerCoaster Tycoon
+    2:ro
+  - --filesystem=~/.wine/drive_c/Program Files/Infogrames Interactive/RollerCoaster
+    Tycoon 2:ro
+  - --filesystem=~/.wine/drive_c/Program Files (x86)/Infogrames Interactive/RollerCoaster
+    Tycoon 2:ro
+
+modules:
+  - name: innoextract
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: git
+        url: https://github.com/dscharrer/innoextract.git
+        tag: '1.9'
+        commit: 81fd9b95b76ee5115ce116bfdbc3bc6b887b809d
+        x-checker-data:
+          type: git
+          tag-pattern: ^([\d.]+)$
+      # See https://github.com/dscharrer/innoextract/commit/264c2fe6b84f90f6290c670e5f676660ec7b2387
+      - type: patch
+        path: patches/innoextract/264c2fe6b84f90f6290c670e5f676660ec7b2387.patch
+    modules:
+      - name: boost
+        buildsystem: simple
+        build-commands:
+          - ./bootstrap.sh --prefix=$FLATPAK_DEST --with-libraries=filesystem,iostreams,date_time,system,program_options
+          - ./b2 -j$FLATPAK_BUILDER_N_JOBS install variant=release cxxstd=17 --layout=system
+        sources:
+          - type: archive
+            url: https://archives.boost.io/release/1.88.0/source/boost_1_88_0.tar.bz2
+            sha256: 46d9d2c06637b219270877c9e16155cbd015b6dc84349af064c088e9b5b12f7b
+            x-checker-data:
+              type: html
+              url: https://www.boost.org/feed/downloads.rss
+              version-pattern: <link>https://www.boost.org/users/history/version_([\d_]+).html</link>
+              url-template: https://archives.boost.io/release/$version0.$version2.$version4/source/boost_$version.tar.bz2
+
+  - name: OpenRCT2
+    buildsystem: cmake-ninja
+    builddir: true
+    build-options:
+      cxxflags: -Wno-error=restrict
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DDOWNLOAD_OBJECTS=OFF
+      - -DDOWNLOAD_OPENSFX=OFF
+      - -DDOWNLOAD_OPENMSX=OFF
+      - -DDOWNLOAD_TITLE_SEQUENCES=OFF
+      - -DDISABLE_VERSION_CHECKER=ON
+    sources:
+      # Build from the checked-out repository instead of a released tag
+      - type: dir
+        path: ../../..
+      - type: archive
+        url: https://github.com/OpenRCT2/title-sequences/releases/download/v0.4.26/title-sequences.zip
+        dest: data/sequence
+        strip-components: 0
+        sha256: dabb9787b1576342fca4dd9f64b3f8cfa04a7e6ce9c2bb9610f47b762905c858
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/OpenRCT2/title-sequences/releases/latest
+          version-query: .tag_name | sub("^v"; "")
+          url-query: .assets[] | select(.name=="title-sequences.zip") | .browser_download_url
+      - type: archive
+        url: https://github.com/OpenRCT2/objects/releases/download/v1.7.11/objects.zip
+        dest: data/object
+        strip-components: 0
+        sha256: 74e73bbd012339511bb359dd0fbb148fda899790ae37d7d69861d88183b19452
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/OpenRCT2/objects/releases/latest
+          version-query: .tag_name | sub("^v"; "")
+          url-query: .assets[] | select(.name=="objects.zip") | .browser_download_url
+      - type: archive
+        url: https://github.com/OpenRCT2/OpenSoundEffects/releases/download/v1.0.6/opensound.zip
+        dest: data
+        strip-components: 0
+        sha256: 06b90f3e19c216752df441d551b26a9e3e1ba7755bdd2102504b73bf993608be
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/OpenRCT2/OpenSoundEffects/releases/latest
+          version-query: .tag_name | sub("^v"; "")
+          url-query: .assets[] | select(.name=="opensound.zip") | .browser_download_url
+      - type: archive
+        url: https://github.com/OpenRCT2/OpenMusic/releases/download/v1.6.1/openmusic.zip
+        dest: data
+        strip-components: 0
+        sha256: 994b350d3b180ee1cb9619fe27f7ebae3a1a5232840c4bd47a89f33fa89de1a1
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/OpenRCT2/OpenMusic/releases/latest
+          version-query: .tag_name | sub("^v"; "")
+          url-query: .assets[] | select(.name=="openmusic.zip") | .browser_download_url
+    post-install:
+      - mv ${FLATPAK_DEST}/share/applications/io.openrct2.savegame.desktop ${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.savegame.desktop
+      - mv ${FLATPAK_DEST}/share/applications/io.openrct2.scenario.desktop ${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.scenario.desktop
+      - mv ${FLATPAK_DEST}/share/applications/io.openrct2.uri.desktop ${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.uri.desktop
+      - desktop-file-edit --set-icon=${FLATPAK_ID} ${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.savegame.desktop
+      - desktop-file-edit --set-icon=${FLATPAK_ID} ${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.scenario.desktop
+      - desktop-file-edit --set-icon=${FLATPAK_ID} ${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.uri.desktop
+      - sed -i "s/<icon name=\"openrct2\"/<icon name=\"${FLATPAK_ID}\"/" ${FLATPAK_DEST}/share/mime/packages/openrct2.xml
+    modules:
+      - name: libzip
+        buildsystem: cmake-ninja
+        config-opts:
+          - -DCMAKE_BUILD_TYPE=Release
+        sources:
+          - type: git
+            url: https://github.com/nih-at/libzip.git
+            tag: v1.11.4
+            commit: 6f8a0cdd24a0dc6cce9dac4a7679da784ab124ea
+            x-checker-data:
+              type: git
+              tag-pattern: ^v([\d.]+)$
+
+      - name: Nlohmann-JSON
+        buildsystem: cmake-ninja
+        config-opts:
+          - -DCMAKE_BUILD_TYPE=Release
+          - -DJSON_BuildTests=OFF
+          - -DJSON_MultipleHeaders=ON
+          - -DJSON_SystemInclude=ON
+        sources:
+          - type: git
+            url: https://github.com/nlohmann/json.git
+            tag: v3.11.3
+            commit: 9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03
+            x-checker-data:
+              type: git
+              tag-pattern: ^v(3.11.[\d.]+)$
+
+      - name: discord-rpc
+        buildsystem: cmake-ninja
+        config-opts:
+          - -DCMAKE_BUILD_TYPE=Release
+          - -DBUILD_EXAMPLES=OFF
+          - -DBUILD_SHARED_LIBS=ON
+        sources:
+          - type: git
+            url: https://github.com/discord/discord-rpc.git
+            tag: v3.4.0
+            commit: e6390c8c4190b59f1cc98bcec688e0037b84974d
+            x-checker-data:
+              type: git
+              tag-pattern: ^v([\d.]+)$
+        modules:
+          - name: rapidjson
+            buildsystem: cmake-ninja
+            config-opts:
+              - -DCMAKE_BUILD_TYPE=Release
+              - -DRAPIDJSON_BUILD_DOC=OFF
+              - -DRAPIDJSON_BUILD_EXAMPLES=OFF
+              - -DRAPIDJSON_BUILD_TESTS=OFF
+            sources:
+              - type: git
+                url: https://github.com/Tencent/rapidjson.git
+                tag: v1.1.0
+                commit: f54b0e47a08782a6131cc3d60f94d038fa6e0a51
+                disable-submodules: true
+                x-checker-data:
+                  type: git
+                  tag-pattern: ^v([\d.]+)$
+              - type: patch
+                paths:
+                  - patches/rapidjson/3b2441b87f99ab65f37b141a7b548ebadb607b96.patch
+                  - patches/rapidjson/862c39be371278a45a88d4d1d75164be57bb7e2d.patch
+            cleanup:
+              - /share/doc
+
+  - name: wrapper
+    buildsystem: simple
+    build-commands:
+      - mv $FLATPAK_DEST/bin/openrct2 $FLATPAK_DEST/bin/openrct2-wrapped
+      - install -Dm755 openrct2-wrapper $FLATPAK_DEST/bin/openrct2
+    sources:
+      - type: file
+        path: openrct2-wrapper
+
+cleanup:
+  - /bin/zip*
+  - /include
+  - /lib/pkgconfig
+  - /lib/cmake
+  - /share/man
+  - /share/cmake
+  - /share/pkgconfig
+  - '*.a'
+  - '*.la'
